@@ -1,0 +1,538 @@
+<!DOCTYPE html> 
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Sampler 12 Teclas – Cymatics (C)</title>
+
+  <style>
+    body {
+      background: #000;
+      color: #eaeaf0;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      margin: 0;
+    }
+
+    h1 { font-size: 1.4rem; margin-bottom: 6px; }
+    .status { font-size: 0.8rem; opacity: 0.8; margin-bottom: 12px; }
+
+    .controls {
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+      align-items: center;
+      margin-bottom: 24px;
+    }
+
+    .top-controls {
+      display: flex;
+      gap: 20px;
+      justify-content: center;
+      align-items: center;
+    }
+
+    button {
+      cursor: pointer;
+      padding: 14px 26px;
+      border-radius: 18px;
+      border: none;
+      background: #222;
+      color: #fff;
+      font-size: 1rem;
+    }
+
+    button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    /* WRAPPER SAMPLE + KNOBS */
+    .sample-knobs-wrapper {
+      display: flex;
+      gap: 40px;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .sample-panel {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .sample-name {
+      font-size: 0.8rem;
+      opacity: 0.85;
+      margin-bottom: -4px;
+      text-align: center;
+    }
+
+    canvas#waveform {
+      background: #0b0b10;
+      border-radius: 6px;
+    }
+
+    .knobs {
+      display: flex;
+      gap: 32px;
+      align-items: flex-end;
+    }
+
+    .knobs label {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      font-size: 0.7rem;
+      gap: 6px;
+    }
+
+    .knob {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 24px;
+      height: 140px;
+      writing-mode: vertical-lr;
+      transform: rotate(180deg);
+      background: transparent;
+      position: relative;
+    }
+
+    .knob::before {
+      content: '';
+      position: absolute;
+      left: 50%;
+      top: 0;
+      transform: translateX(-50%);
+      width: 3px;
+      height: 100%;
+      background: linear-gradient(180deg, #2a2a35, #0b0b10);
+      border-radius: 2px;
+    }
+
+    .knob::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 26px;
+      height: 12px;
+      background: #eaeaf0;
+      border-radius: 6px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.6);
+      border: 1px solid #aaa;
+      position: relative;
+      z-index: 2;
+    }
+
+    .mono {
+      font-size: 0.7rem;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+      padding-bottom: 25px;
+    }
+
+    .mono input {
+      appearance: none;
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: #333;
+      border: 1px solid #555;
+      cursor: pointer;
+    }
+
+    .mono input:checked {
+      background: #4da6ff;
+      box-shadow: 0 0 6px rgba(77,166,255,0.8);
+    }
+
+    .synth {
+      position: relative;
+      display: flex;
+      margin-top: 12px;
+    }
+
+    .white-key {
+      width: 52px;
+      height: 200px;
+      background: linear-gradient(#D6D6D6, #A8A8A8);
+      border-radius: 0 0 6px 6px;
+      border: 1px solid #999;
+      cursor: pointer;
+      display: flex;
+      align-items: flex-end;
+      justify-content: center;
+      padding-bottom: 8px;
+      user-select: none;
+      transition: background 0.1s;
+    }
+
+    .black-key {
+      width: 32px;
+      height: 120px;
+      background: linear-gradient(#111, #000);
+      border-radius: 0 0 4px 4px;
+      position: absolute;
+      top: 0;
+      z-index: 2;
+      color: #fff;
+      display: flex;
+      align-items: flex-end;
+      justify-content: center;
+      padding-bottom: 6px;
+      font-size: 0.65rem;
+      cursor: pointer;
+      transition: background 0.1s;
+    }
+
+    /* animação de tecla pressionada */
+    .white-key.active { background: linear-gradient(#d0d0d0, #bcbcbc); }
+    .black-key.active { background: linear-gradient(#222, #000); }
+
+    .label { font-size: 0.7rem; color: #222; }
+
+    /* imagem do teclado */
+    .keyboard-image-wrapper {
+      margin-top: 16px;
+      display: flex;
+      justify-content: center;
+      width: 100%;
+    }
+
+    #keyboardImage {
+      width: 25%; /* 2x menor */
+      height: auto;
+      border-radius: 6px;
+    }
+  </style>
+</head>
+
+<body>
+
+  <h1>Sampler • Machine • Presets</h1>
+  <div class="status" id="status">Clique no 🎲 para sortear um preset</div>
+
+  <div class="controls">
+
+    <div class="top-controls">
+      <button id="dice">🎲 Roll</button>
+      <button id="download" disabled>⬇️ Download</button>
+    </div>
+
+    <div class="sample-knobs-wrapper">
+
+      <div class="sample-panel">
+        <div id="sampleName" class="sample-name">Nenhum preset</div>
+        <canvas id="waveform" width="200" height="40"></canvas>
+      </div>
+
+      <div class="knobs">
+        <!-- Cut Itself primeiro -->
+        <label class="mono">
+          <input id="mono" type="checkbox">
+          Cut Itself
+        </label>
+
+        <!-- Volume -->
+        <label>
+          Volume
+          <input class="knob" id="volume" type="range" min="0" max="1" step="0.01" value="0.8">
+        </label>
+
+        <!-- Cutoff -->
+        <label>
+          Cutoff
+          <input class="knob" id="cutoff" type="range" min="200" max="12000" step="10" value="8000">
+        </label>
+        
+        <!-- Pitch -->
+        <label>
+          Pitch
+          <input class="knob" id="pitch" type="range" min="-12" max="12" step="1" value="0">
+        </label>
+        
+        <!-- Reverb -->
+        <label>
+          Reverb
+          <input class="knob" id="reverb" type="range" min="0" max="1" step="0.01" value="0">
+        </label>
+
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Teclado virtual -->
+  <div class="synth" id="keyboard"></div>
+  <p>Toque com As Teclas:</p>
+  <!-- Imagem abaixo do teclado -->
+  <div class="keyboard-image-wrapper">
+    <img src="https://sab4t.github.io/presets/images/teclas.png" alt="Teclado" id="keyboardImage">
+  </div>
+  
+  <script>
+    const AudioContext = window.AudioContext || window.webkitAudioContext;
+    const audioCtx = new AudioContext();
+
+    const statusEl = document.getElementById('status');
+    const sampleNameEl = document.getElementById('sampleName');
+    const diceBtn = document.getElementById('dice');
+    const downloadBtn = document.getElementById('download');
+    const keyboard = document.getElementById('keyboard');
+
+    const pitchControl = document.getElementById('pitch');
+    const volume = document.getElementById('volume');
+    const cutoff = document.getElementById('cutoff');
+    const mono = document.getElementById('mono');
+    const reverbControl = document.getElementById('reverb');
+
+
+    const notes = [
+      { name: 'C', semitones: 0, key: 'q' },
+      { name: 'C#', semitones: 1, key: '2' },
+      { name: 'D', semitones: 2, key: 'w' },
+      { name: 'D#', semitones: 3, key: '3' },
+      { name: 'E', semitones: 4, key: 'e' },
+      { name: 'F', semitones: 5, key: 'r' },
+      { name: 'F#', semitones: 6, key: '5' },
+      { name: 'G', semitones: 7, key: 't' },
+      { name: 'G#', semitones: 8, key: '6' },
+      { name: 'A', semitones: 9, key: 'y' },
+      { name: 'A#', semitones: 10, key: '7' },
+      { name: 'B', semitones: 11, key: 'u' }
+    ];
+
+    const BASE_URL = 'https://sab4t.github.io/presets/samples';
+    const RAW_BASE_URL = 'https://raw.githubusercontent.com/sab4t/presets/main/samples';
+
+    const presets = {
+      'PLUCK Soft Sine': `${BASE_URL}/Cymatics-PLUCK-Soft-Sine-C.wav`,
+      'BASS Moog': `${BASE_URL}/Cymatics-BASS-Moog-C.wav`,
+      'INSTR Harmonic': `${BASE_URL}/Cymatics-INSTR-Harmonic-C.wav`,
+      'KEYS No Attack': `${BASE_URL}/Cymatics-KEYS-No-Attack-C.wav`,
+      'BELL Midranged': `${BASE_URL}/Cymatics-BELLMidranged-C.wav`,
+      'SYNTH Five Alive': `${BASE_URL}/Cymatics-SYNTHFiveAlive-C.wav`,
+      'INSTR Flute Strike': `${BASE_URL}/Cymatics-INSTRFluteStrike-C.wav`,
+      'BASS Donk': `${BASE_URL}/Cymatics-BASSDonk-C.wav`,
+      'KEYS Heavy': `${BASE_URL}/Cymatics-KEYSHeavy-C.wav`,
+      'LEAD Dizzy': `${BASE_URL}/LEADDizzy-C.wav`,
+      'LEAD Dusty': `${BASE_URL}/LEADDusty-C.wav`,
+      'PAD Dark Dreams': `${BASE_URL}/PADDarkDreams-C.wav`,
+      'PAD Eerie Swamp': `${BASE_URL}/PADEerieSwamp-C.wav`,
+      'PAD_Heaven': `${BASE_URL}/PAD_Heaven-C.wav`,
+      'PAD_Transmission': `${BASE_URL}/PAD_Transmission-C.wav`,
+      'PLUCK_Aquatic': `${BASE_URL}/PLUCK_Aquatic-C.wav`,
+      'SUBNAUTICA': `${BASE_URL}/SUBNAUTICA.wav`,
+      'KEY_OPPENHEIMER': `${BASE_URL}/KEY_OPPENHEIMER.wav`,
+      'Ghost_Piano': `${BASE_URL}/Ghost_Piano-C.wav`,
+      'METRO_Flute': `${BASE_URL}/METRO_Flute-C.wav`,
+      'Flute_Wind': `${BASE_URL}/Flute_Wind-C.wav`,
+      'Piano_Pluck': `${BASE_URL}/Piano_Pluck-C.wav`,
+      'Piano_Race': `${BASE_URL}/Piano_Race-C.wav`,
+      'Piano_Villians': `${BASE_URL}/Piano_Villians-C.wav`,
+      'Synth_Recover': `${BASE_URL}/Synth_Recover-C.wav`,
+      'Pluck_MX2': `${BASE_URL}/Pluck_MX2.wav`,
+      'Punch_808': `${BASE_URL}/Punch_808.wav`,
+      'Church': `${BASE_URL}/Church.wav`,
+      'Violin': `${BASE_URL}/Violin-c.wav`,
+      'SYNTH_Texture': `${BASE_URL}/SYNTH_Texture-C.wav`,
+      'PLUCK_Waterdrum': `${BASE_URL}/PLUCK_Waterdrum-C.wav`,
+      'SYNTH_Doompy': `${BASE_URL}/SYNTH_Doompy-C.wav`,
+
+    };
+
+    const presetKeys = Object.keys(presets);
+
+    let currentBuffer = null;
+    let currentPresetDownloadUrl = null;
+    let activeSource = null;
+
+    const gainNode = audioCtx.createGain();
+const filterNode = audioCtx.createBiquadFilter();
+filterNode.type = 'lowpass';
+
+gainNode.gain.value = 0.8;
+filterNode.frequency.value = 8000;
+
+const dryGain = audioCtx.createGain();
+const wetGain = audioCtx.createGain();
+const convolver = audioCtx.createConvolver();
+
+dryGain.gain.value = 1;
+wetGain.gain.value = 0;
+
+convolver.buffer = createReverbImpulse(audioCtx);
+
+filterNode.connect(dryGain);
+filterNode.connect(convolver);
+
+convolver.connect(wetGain);
+
+dryGain.connect(gainNode);
+wetGain.connect(gainNode);
+
+gainNode.connect(audioCtx.destination);
+
+
+    function drawWaveform(buffer) {
+      const canvas = document.getElementById('waveform');
+      const ctx = canvas.getContext('2d');
+      const data = buffer.getChannelData(0);
+
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.strokeStyle = '#6cf';
+      ctx.beginPath();
+
+      const step = data.length / canvas.width;
+
+      for (let i = 0; i < canvas.width; i++) {
+        const v = data[Math.floor(i * step)] || 0;
+        const y = canvas.height / 2 - v * canvas.height / 2;
+        i === 0 ? ctx.moveTo(i, y) : ctx.lineTo(i, y);
+      }
+
+      ctx.stroke();
+    }
+    
+    function createReverbImpulse(ctx, duration = 2.2, decay = 2.5) {
+      const rate = ctx.sampleRate;
+      const length = rate * duration;
+      const impulse = ctx.createBuffer(2, length, rate);
+
+      for (let ch = 0; ch < 2; ch++) {
+      const channelData = impulse.getChannelData(ch);
+      for (let i = 0; i < length; i++) {
+      channelData[i] =
+        (Math.random() * 2 - 1) *
+        Math.pow(1 - i / length, decay);
+    }
+  }
+  return impulse;
+}
+
+
+    async function loadSample(url) {
+      statusEl.textContent = 'Carregando sample...';
+      const res = await fetch(url);
+      const buffer = await res.arrayBuffer();
+      currentBuffer = await audioCtx.decodeAudioData(buffer);
+
+      currentPresetDownloadUrl = url.replace(BASE_URL, RAW_BASE_URL);
+      drawWaveform(currentBuffer);
+
+      downloadBtn.disabled = false;
+      sampleNameEl.textContent = currentPresetDownloadUrl.split('/').pop();
+      statusEl.textContent = 'Sample carregado';
+    }
+
+    async function playSample(semitones) {
+      if (!currentBuffer) return;
+      if (audioCtx.state !== 'running') await audioCtx.resume();
+
+      const now = audioCtx.currentTime;
+
+      if (document.getElementById('mono').checked && activeSource) {
+        try { activeSource.stop(now); } catch {}
+      }
+
+      const src = audioCtx.createBufferSource();
+      src.buffer = currentBuffer;
+      const pitchSemitones = semitones + parseInt(pitchControl.value);
+      src.playbackRate.value = Math.pow(2, pitchSemitones / 12);
+      src.connect(filterNode);
+
+      gainNode.gain.setValueAtTime(parseFloat(volume.value), now);
+      src.start(now);
+      activeSource = src;
+    }
+
+    volume.addEventListener('input', e => {
+      gainNode.gain.value = parseFloat(e.target.value);
+    });
+
+    cutoff.addEventListener('input', e => {
+      filterNode.frequency.value = parseFloat(e.target.value);
+    });
+
+    reverbControl.addEventListener('input', e => {
+    const value = parseFloat(e.target.value);
+    wetGain.gain.value = value;
+    dryGain.gain.value = 1 - value;
+    });
+
+
+    const blackOffsets = { 'C#': 36, 'D#': 88, 'F#': 192, 'G#': 244, 'A#': 296 };
+    const keyElements = {};
+
+    notes.forEach(note => {
+      const key = document.createElement('div');
+      const isBlack = note.name.includes('#');
+
+      key.className = isBlack ? 'black-key' : 'white-key';
+      if (isBlack) key.style.left = blackOffsets[note.name] + 'px';
+
+      key.innerHTML = `<span class="label">${note.name}</span>`;
+      
+      key.addEventListener('mousedown', () => playSample(note.semitones));
+      key.addEventListener('touchstart', () => playSample(note.semitones));
+
+      keyboard.appendChild(key);
+
+      keyElements[note.key] = key;
+    });
+
+    window.addEventListener('keydown', e => {
+      if (e.repeat) return;
+      const note = notes.find(n => n.key === e.key);
+      if (note) {
+        playSample(note.semitones);
+        const keyEl = keyElements[e.key];
+        if (keyEl) keyEl.classList.add('active');
+      }
+    });
+
+    window.addEventListener('keyup', e => {
+      const keyEl = keyElements[e.key];
+      if (keyEl) keyEl.classList.remove('active');
+    });
+
+    downloadBtn.addEventListener('click', async () => {
+      const res = await fetch(currentPresetDownloadUrl);
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = currentPresetDownloadUrl.split('/').pop();
+      a.click();
+      URL.revokeObjectURL(url);
+    });
+
+    diceBtn.addEventListener('click', async () => {
+      if (audioCtx.state !== 'running') await audioCtx.resume();
+
+      volume.value = 0.8;
+      cutoff.value = 8000;
+      pitchControl.value = 0;
+      mono.checked = false;
+
+      gainNode.gain.value = 0.8;
+      filterNode.frequency.value = 8000;
+      
+      reverbControl.value = 0;
+      wetGain.gain.value = 0;
+      dryGain.gain.value = 1;
+
+
+      const key = presetKeys[Math.floor(Math.random() * presetKeys.length)];
+      statusEl.textContent = `🎲 Preset sorteado: ${key}`;
+      await loadSample(presets[key]);
+    });
+  </script>
+
+</body>
+</html>
