@@ -276,41 +276,40 @@
   </div>
   
   <script>
-    const AudioContext = window.AudioContext || window.webkitAudioContext;
-    const audioCtx = new AudioContext();
+const AudioContext = window.AudioContext || window.webkitAudioContext;
+const audioCtx = new AudioContext();
 
-    const statusEl = document.getElementById('status');
-    const sampleNameEl = document.getElementById('sampleName');
-    const diceBtn = document.getElementById('dice');
-    const downloadBtn = document.getElementById('download');
-    const keyboard = document.getElementById('keyboard');
+const statusEl = document.getElementById('status');
+const sampleNameEl = document.getElementById('sampleName');
+const diceBtn = document.getElementById('dice');
+const downloadBtn = document.getElementById('download');
+const keyboard = document.getElementById('keyboard');
 
-    const pitchControl = document.getElementById('pitch');
-    const volume = document.getElementById('volume');
-    const cutoff = document.getElementById('cutoff');
-    const mono = document.getElementById('mono');
-    const reverbControl = document.getElementById('reverb');
+const pitchControl = document.getElementById('pitch');
+const volume = document.getElementById('volume');
+const cutoff = document.getElementById('cutoff');
+const mono = document.getElementById('mono');
+const reverbControl = document.getElementById('reverb');
 
+const notes = [
+  { name: 'C', semitones: 0, key: 'q' },
+  { name: 'C#', semitones: 1, key: '2' },
+  { name: 'D', semitones: 2, key: 'w' },
+  { name: 'D#', semitones: 3, key: '3' },
+  { name: 'E', semitones: 4, key: 'e' },
+  { name: 'F', semitones: 5, key: 'r' },
+  { name: 'F#', semitones: 6, key: '5' },
+  { name: 'G', semitones: 7, key: 't' },
+  { name: 'G#', semitones: 8, key: '6' },
+  { name: 'A', semitones: 9, key: 'y' },
+  { name: 'A#', semitones: 10, key: '7' },
+  { name: 'B', semitones: 11, key: 'u' }
+];
 
-    const notes = [
-      { name: 'C', semitones: 0, key: 'q' },
-      { name: 'C#', semitones: 1, key: '2' },
-      { name: 'D', semitones: 2, key: 'w' },
-      { name: 'D#', semitones: 3, key: '3' },
-      { name: 'E', semitones: 4, key: 'e' },
-      { name: 'F', semitones: 5, key: 'r' },
-      { name: 'F#', semitones: 6, key: '5' },
-      { name: 'G', semitones: 7, key: 't' },
-      { name: 'G#', semitones: 8, key: '6' },
-      { name: 'A', semitones: 9, key: 'y' },
-      { name: 'A#', semitones: 10, key: '7' },
-      { name: 'B', semitones: 11, key: 'u' }
-    ];
+const BASE_URL = 'https://sab4t.github.io/presets/samples';
+const RAW_BASE_URL = 'https://raw.githubusercontent.com/sab4t/presets/main/samples';
 
-    const BASE_URL = 'https://sab4t.github.io/presets/samples';
-    const RAW_BASE_URL = 'https://raw.githubusercontent.com/sab4t/presets/main/samples';
-
-    const presets = {
+const presets = {
       'PLUCK Soft Sine': `${BASE_URL}/Cymatics-PLUCK-Soft-Sine-C.wav`,
       'BASS Moog': `${BASE_URL}/Cymatics-BASS-Moog-C.wav`,
       'INSTR Harmonic': `${BASE_URL}/Cymatics-INSTR-Harmonic-C.wav`,
@@ -345,14 +344,17 @@
       'SYNTH_Doompy': `${BASE_URL}/SYNTH_Doompy-C.wav`,
 
     };
+const presetKeys = Object.keys(presets);
 
-    const presetKeys = Object.keys(presets);
+let currentBuffer = null;
+let currentPresetDownloadUrl = null;
+let activeVoices = [];
 
-    let currentBuffer = null;
-    let currentPresetDownloadUrl = null;
-    let activeSource = null;
 
-    const gainNode = audioCtx.createGain();
+/* =====================
+   AUDIO CHAIN ORIGINAL
+===================== */
+const gainNode = audioCtx.createGain();
 const filterNode = audioCtx.createBiquadFilter();
 filterNode.type = 'lowpass';
 
@@ -370,169 +372,209 @@ convolver.buffer = createReverbImpulse(audioCtx);
 
 filterNode.connect(dryGain);
 filterNode.connect(convolver);
-
 convolver.connect(wetGain);
-
 dryGain.connect(gainNode);
 wetGain.connect(gainNode);
-
 gainNode.connect(audioCtx.destination);
 
+/* =====================
+   UTILIDADES
+===================== */
+function fadeOutAndStop(src, noteGain, time) {
+  if (!src || !noteGain) return;
+  noteGain.gain.cancelScheduledValues(time);
+  noteGain.gain.setTargetAtTime(0, time, 0.02);
+  try { src.stop(time + 0.1); } catch {}
+}
 
-    function drawWaveform(buffer) {
-      const canvas = document.getElementById('waveform');
-      const ctx = canvas.getContext('2d');
-      const data = buffer.getChannelData(0);
+function createReverbImpulse(ctx, duration = 2.2, decay = 2.5) {
+  const rate = ctx.sampleRate;
+  const length = rate * duration;
+  const impulse = ctx.createBuffer(2, length, rate);
 
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      ctx.strokeStyle = '#6cf';
-      ctx.beginPath();
-
-      const step = data.length / canvas.width;
-
-      for (let i = 0; i < canvas.width; i++) {
-        const v = data[Math.floor(i * step)] || 0;
-        const y = canvas.height / 2 - v * canvas.height / 2;
-        i === 0 ? ctx.moveTo(i, y) : ctx.lineTo(i, y);
-      }
-
-      ctx.stroke();
-    }
-    
-    function createReverbImpulse(ctx, duration = 2.2, decay = 2.5) {
-      const rate = ctx.sampleRate;
-      const length = rate * duration;
-      const impulse = ctx.createBuffer(2, length, rate);
-
-      for (let ch = 0; ch < 2; ch++) {
-      const channelData = impulse.getChannelData(ch);
-      for (let i = 0; i < length; i++) {
-      channelData[i] =
-        (Math.random() * 2 - 1) *
-        Math.pow(1 - i / length, decay);
+  for (let ch = 0; ch < 2; ch++) {
+    const data = impulse.getChannelData(ch);
+    for (let i = 0; i < length; i++) {
+      data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / length, decay);
     }
   }
   return impulse;
 }
 
+function drawWaveform(buffer) {
+  const canvas = document.getElementById('waveform');
+  const ctx = canvas.getContext('2d');
+  const data = buffer.getChannelData(0);
 
-    async function loadSample(url) {
-      statusEl.textContent = 'Carregando sample...';
-      const res = await fetch(url);
-      const buffer = await res.arrayBuffer();
-      currentBuffer = await audioCtx.decodeAudioData(buffer);
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.strokeStyle = '#6cf';
+  ctx.beginPath();
 
-      currentPresetDownloadUrl = url.replace(BASE_URL, RAW_BASE_URL);
-      drawWaveform(currentBuffer);
+  const step = data.length / canvas.width;
+  for (let i = 0; i < canvas.width; i++) {
+    const v = data[Math.floor(i * step)] || 0;
+    const y = canvas.height / 2 - v * canvas.height / 2;
+    i === 0 ? ctx.moveTo(i, y) : ctx.lineTo(i, y);
+  }
+  ctx.stroke();
+}
 
-      downloadBtn.disabled = false;
-      sampleNameEl.textContent = currentPresetDownloadUrl.split('/').pop();
-      statusEl.textContent = 'Sample carregado';
-    }
+/* =====================
+   LOAD SAMPLE
+===================== */
+async function loadSample(url) {
+  // 🔴 PARA QUALQUER SOM ATIVO
+  const now = audioCtx.currentTime;
 
-    async function playSample(semitones) {
-      if (!currentBuffer) return;
-      if (audioCtx.state !== 'running') await audioCtx.resume();
-
-      const now = audioCtx.currentTime;
-
-      if (document.getElementById('mono').checked && activeSource) {
-        try { activeSource.stop(now); } catch {}
-      }
-
-      const src = audioCtx.createBufferSource();
-      src.buffer = currentBuffer;
-      const pitchSemitones = semitones + parseInt(pitchControl.value);
-      src.playbackRate.value = Math.pow(2, pitchSemitones / 12);
-      src.connect(filterNode);
-
-      gainNode.gain.setValueAtTime(parseFloat(volume.value), now);
-      src.start(now);
-      activeSource = src;
-    }
-
-    volume.addEventListener('input', e => {
-      gainNode.gain.value = parseFloat(e.target.value);
-    });
-
-    cutoff.addEventListener('input', e => {
-      filterNode.frequency.value = parseFloat(e.target.value);
-    });
-
-    reverbControl.addEventListener('input', e => {
-    const value = parseFloat(e.target.value);
-    wetGain.gain.value = value;
-    dryGain.gain.value = 1 - value;
-    });
+// 🔴 PARA TODAS AS NOTAS ATIVAS (pads longos)
+activeVoices.forEach(v => {
+  fadeOutAndStop(v.src, v.gain, now);
+});
+activeVoices = [];
 
 
-    const blackOffsets = { 'C#': 36, 'D#': 88, 'F#': 192, 'G#': 244, 'A#': 296 };
-    const keyElements = {};
+  statusEl.textContent = 'Carregando sample...';
+  const res = await fetch(url);
+  const buffer = await res.arrayBuffer();
+  currentBuffer = await audioCtx.decodeAudioData(buffer);
 
-    notes.forEach(note => {
-      const key = document.createElement('div');
-      const isBlack = note.name.includes('#');
+  currentPresetDownloadUrl = url.replace(BASE_URL, RAW_BASE_URL);
+  drawWaveform(currentBuffer);
 
-      key.className = isBlack ? 'black-key' : 'white-key';
-      if (isBlack) key.style.left = blackOffsets[note.name] + 'px';
+  sampleNameEl.textContent = currentPresetDownloadUrl.split('/').pop();
+  downloadBtn.disabled = false;
+  statusEl.textContent = 'Sample carregado';
+}
 
-      key.innerHTML = `<span class="label">${note.name}</span>`;
-      
-      key.addEventListener('mousedown', () => playSample(note.semitones));
-      key.addEventListener('touchstart', () => playSample(note.semitones));
+/* =====================
+   PLAY SAMPLE
+===================== */
+async function playSample(semitones) {
+  if (!currentBuffer) return;
+  if (audioCtx.state !== 'running') await audioCtx.resume();
 
-      keyboard.appendChild(key);
+  const now = audioCtx.currentTime;
 
-      keyElements[note.key] = key;
-    });
-
-    window.addEventListener('keydown', e => {
-      if (e.repeat) return;
-      const note = notes.find(n => n.key === e.key);
-      if (note) {
-        playSample(note.semitones);
-        const keyEl = keyElements[e.key];
-        if (keyEl) keyEl.classList.add('active');
-      }
-    });
-
-    window.addEventListener('keyup', e => {
-      const keyEl = keyElements[e.key];
-      if (keyEl) keyEl.classList.remove('active');
-    });
-
-    downloadBtn.addEventListener('click', async () => {
-      const res = await fetch(currentPresetDownloadUrl);
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = currentPresetDownloadUrl.split('/').pop();
-      a.click();
-      URL.revokeObjectURL(url);
-    });
-
-    diceBtn.addEventListener('click', async () => {
-      if (audioCtx.state !== 'running') await audioCtx.resume();
-
-      volume.value = 0.8;
-      cutoff.value = 8000;
-      pitchControl.value = 0;
-      mono.checked = false;
-
-      gainNode.gain.value = 0.8;
-      filterNode.frequency.value = 8000;
-      
-      reverbControl.value = 0;
-      wetGain.gain.value = 0;
-      dryGain.gain.value = 1;
+  // Cut Itself com fade
+  if (mono.checked) {
+  activeVoices.forEach(v => {
+    fadeOutAndStop(v.src, v.gain, now);
+  });
+  activeVoices = [];
+}
 
 
-      const key = presetKeys[Math.floor(Math.random() * presetKeys.length)];
-      statusEl.textContent = `🎲 Preset sorteado: ${key}`;
-      await loadSample(presets[key]);
-    });
-  </script>
+  const src = audioCtx.createBufferSource();
+  const noteGain = audioCtx.createGain();
+
+  src.buffer = currentBuffer;
+
+  const pitch = semitones + parseInt(pitchControl.value);
+  src.playbackRate.value = Math.pow(2, pitch / 12);
+
+  // micro fade-in (anti-click)
+  noteGain.gain.setValueAtTime(0, now);
+  noteGain.gain.linearRampToValueAtTime(1, now + 0.005);
+
+  src.connect(noteGain);
+  noteGain.connect(filterNode);
+
+  gainNode.gain.setValueAtTime(parseFloat(volume.value), now);
+  filterNode.frequency.setTargetAtTime(parseFloat(cutoff.value), now, 0.01);
+
+  src.start(now);
+
+  activeVoices.push({
+  src: src,
+  gain: noteGain
+});
+
+}
+
+/* =====================
+   CONTROLES (INALTERADOS)
+===================== */
+volume.oninput = e => gainNode.gain.value = +e.target.value;
+cutoff.oninput = e => filterNode.frequency.value = +e.target.value;
+reverbControl.oninput = e => {
+  const v = +e.target.value;
+  wetGain.gain.value = v;
+  dryGain.gain.value = 1 - v;
+};
+
+/* =====================
+   KEYBOARD
+===================== */
+const blackOffsets = { 'C#': 36, 'D#': 88, 'F#': 192, 'G#': 244, 'A#': 296 };
+const keyElements = {};
+
+notes.forEach(note => {
+  const key = document.createElement('div');
+  const isBlack = note.name.includes('#');
+  key.className = isBlack ? 'black-key' : 'white-key';
+  if (isBlack) key.style.left = blackOffsets[note.name] + 'px';
+
+  key.innerHTML = `<span class="label">${note.name}</span>`;
+  key.onmousedown = () => playSample(note.semitones);
+  key.ontouchstart = () => playSample(note.semitones);
+
+  keyboard.appendChild(key);
+  keyElements[note.key] = key;
+});
+
+window.addEventListener('keydown', e => {
+  if (e.repeat) return;
+  const note = notes.find(n => n.key === e.key);
+  if (note) {
+    playSample(note.semitones);
+    keyElements[e.key]?.classList.add('active');
+  }
+});
+
+window.addEventListener('keyup', e => {
+  keyElements[e.key]?.classList.remove('active');
+});
+
+/* =====================
+   DOWNLOAD
+===================== */
+downloadBtn.onclick = async () => {
+  const res = await fetch(currentPresetDownloadUrl);
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = currentPresetDownloadUrl.split('/').pop();
+  a.click();
+  URL.revokeObjectURL(url);
+};
+
+/* =====================
+   ROLL (RESET 100%)
+===================== */
+diceBtn.onclick = async () => {
+  if (audioCtx.state !== 'running') await audioCtx.resume();
+
+  // reset visual + áudio
+  volume.value = 0.8;
+  cutoff.value = 8000;
+  pitchControl.value = 0;
+  mono.checked = false;
+
+  gainNode.gain.value = 0.8;
+  filterNode.frequency.value = 8000;
+
+  reverbControl.value = 0;
+  wetGain.gain.value = 0;
+  dryGain.gain.value = 1;
+
+  const key = presetKeys[Math.floor(Math.random() * presetKeys.length)];
+  statusEl.textContent = `🎲 Preset sorteado: ${key}`;
+  await loadSample(presets[key]);
+};
+</script>
+
+
 
 </body>
 </html>
